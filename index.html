@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Transit Tracker" />
+  <title>Transit Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --cyan: #00d4ff;
+      --cyan-dim: rgba(0,212,255,0.4);
+      --cyan-faint: rgba(0,212,255,0.07);
+      --cyan-border: rgba(0,212,255,0.2);
+      --green: #6bffb8;
+      --red: #ff6b6b;
+      --yellow-acc: #ffd166;
+    }
+    body {
+      min-height: 100vh; min-height: -webkit-fill-available;
+      background: linear-gradient(135deg, #0a0a1a 0%, #0f1535 50%, #0a1628 100%);
+      font-family: 'Courier New', Courier, monospace;
+      color: #e0f7ff;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 48px 16px 48px; position: relative; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none; z-index: 0;
+    }
+    .wrap { position: relative; z-index: 1; width: 100%; max-width: 440px; }
+
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 { color: var(--cyan); font-size: 22px; font-weight: 700; letter-spacing: 0.15em; text-shadow: 0 0 20px rgba(0,212,255,0.5); margin-bottom: 4px; }
+    .header p { color: var(--cyan-dim); font-size: 10px; letter-spacing: 0.2em; }
+
+    .route-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .route-tab {
+      flex: 1; padding: 11px 4px; border-radius: 10px;
+      border: 1px solid var(--cyan-border); background: transparent; color: var(--cyan-dim);
+      font-family: inherit; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.07em; text-align: center; cursor: pointer; transition: all 0.2s; line-height: 1.5;
+    }
+    .route-tab.active { border-color: var(--cyan); background: rgba(0,212,255,0.12); color: var(--cyan); text-shadow: 0 0 10px rgba(0,212,255,0.4); }
+    .route-tab .tab-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+    .card {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--cyan-border);
+      border-radius: 16px; padding: 20px 18px 16px;
+      box-shadow: 0 0 40px rgba(0,212,255,0.04), inset 0 1px 0 rgba(0,212,255,0.08);
+      margin-bottom: 12px;
+    }
+    .clock { text-align: center; margin-bottom: 14px; }
+    .clock-time { font-size: 32px; font-weight: 700; letter-spacing: 0.08em; color: var(--cyan); text-shadow: 0 0 20px rgba(0,212,255,0.4); line-height: 1; }
+    .clock-date { font-size: 10px; color: var(--cyan-dim); letter-spacing: 0.15em; margin-top: 4px; text-transform: uppercase; }
+    .divider { height: 1px; background: var(--cyan-border); margin: 0 0 16px; }
+
+    .field { margin-bottom: 13px; }
+    .field label { display: block; font-size: 10px; letter-spacing: 0.18em; color: rgba(0,212,255,0.45); margin-bottom: 5px; text-transform: uppercase; }
+    input, select {
+      width: 100%; padding: 10px 12px;
+      background: var(--cyan-faint); border: 1px solid var(--cyan-border);
+      border-radius: 8px; color: #e0f7ff;
+      font-family: 'Courier New', Courier, monospace; font-size: 13px; outline: none;
+      appearance: none; -webkit-appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2300d4ff' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px;
+    }
+    input[type="time"] {
+      color: var(--green); font-weight: 700; font-size: 15px;
+      border-color: rgba(107,255,184,0.35); background: rgba(107,255,184,0.06);
+    }
+
+    .trip-info {
+      background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.13);
+      border-radius: 10px; padding: 11px 13px; margin-bottom: 13px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0;
+    }
+    .ti-label { font-size: 9px; color: rgba(0,212,255,0.4); letter-spacing: 0.15em; }
+    .ti-time { font-size: 15px; color: var(--cyan); font-weight: 700; }
+    .ti-sub { font-size: 9px; color: rgba(0,212,255,0.32); margin-top: 1px; }
+    .ti-right { text-align: right; }
+    .ti-sched { grid-column: 1/-1; margin-top: 4px; padding-top: 7px; border-top: 1px solid rgba(0,212,255,0.1); font-size: 9px; color: rgba(0,212,255,0.4); letter-spacing: 0.1em; }
+    .ti-sched span { color: var(--green); font-weight: 700; margin-left: 6px; font-size: 11px; }
+
+    /* TIME ENTRY ROWS — shown after tapping log */
+    .time-entry {
+      background: rgba(107,255,184,0.05); border: 1px solid rgba(107,255,184,0.25);
+      border-radius: 10px; padding: 12px 13px; margin-bottom: 10px;
+    }
+    .time-entry-label {
+      font-size: 9px; color: rgba(107,255,184,0.6); letter-spacing: 0.18em;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .time-entry-row { display: flex; align-items: center; gap: 10px; }
+    .time-entry-row input[type="time"] { flex: 1; margin: 0; }
+    .time-entry-hint { font-size: 9px; color: rgba(107,255,184,0.45); margin-top: 4px; }
+
+    /* BUTTONS */
+    .btn {
+      width: 100%; padding: 14px 0; margin-top: 6px;
+      border-radius: 10px; font-family: inherit; font-weight: 700; font-size: 12px;
+      letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; transition: all 0.25s;
+      border: 1px solid;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+    .btn-log {
+      background: linear-gradient(135deg, rgba(0,212,255,0.18), rgba(0,100,200,0.28));
+      border-color: rgba(0,212,255,0.45); color: var(--cyan);
+      text-shadow: 0 0 10px rgba(0,212,255,0.4);
+    }
+    .btn-confirm {
+      background: linear-gradient(135deg, rgba(255,209,102,0.18), rgba(255,150,0,0.2));
+      border-color: rgba(255,209,102,0.55); color: var(--yellow-acc);
+      text-shadow: 0 0 10px rgba(255,209,102,0.3);
+    }
+    .btn-sending {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.4);
+      cursor: wait;
+    }
+    .btn-success {
+      background: linear-gradient(135deg, rgba(107,255,184,0.16), rgba(0,200,100,0.2));
+      border-color: rgba(107,255,184,0.5); color: var(--green);
+      text-shadow: 0 0 10px rgba(107,255,184,0.35);
+      box-shadow: 0 0 24px rgba(107,255,184,0.15);
+    }
+    .btn-reset {
+      background: transparent; border-color: rgba(255,100,100,0.2);
+      color: rgba(255,100,100,0.4); font-size: 11px; padding: 9px 0;
+    }
+
+    /* COMBO STEPPER */
+    .combo-header { font-size: 10px; letter-spacing: 0.18em; color: rgba(0,212,255,0.45); text-transform: uppercase; margin-bottom: 12px; }
+    .step-track { margin-bottom: 10px; position: relative; }
+    .step-line { position: absolute; left: 15px; top: 32px; bottom: 32px; width: 2px; background: linear-gradient(to bottom, rgba(0,212,255,0.25), rgba(0,212,255,0.08)); }
+    .step {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 12px 10px 10px; border-radius: 10px; margin-bottom: 6px;
+      border: 1px solid rgba(0,212,255,0.1); background: rgba(0,212,255,0.02);
+      position: relative; transition: all 0.25s;
+    }
+    .step.active { border-color: var(--cyan); background: rgba(0,212,255,0.09); box-shadow: 0 0 16px rgba(0,212,255,0.1); }
+    .step.done { border-color: rgba(107,255,184,0.28); background: rgba(107,255,184,0.03); }
+    .step.locked { opacity: 0.38; }
+    .step-dot {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; border: 2px solid rgba(0,212,255,0.22);
+      background: rgba(0,0,0,0.4); z-index: 1; margin-top: 1px;
+    }
+    .step.active .step-dot { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,212,255,0.3); }
+    .step.done .step-dot { border-color: var(--green); background: rgba(107,255,184,0.1); }
+    .step-body { flex: 1; min-width: 0; }
+    .step-title { font-size: 11px; font-weight: 700; color: rgba(0,212,255,0.65); letter-spacing: 0.08em; margin-bottom: 1px; }
+    .step.active .step-title { color: var(--cyan); }
+    .step.done .step-title { color: var(--green); }
+    .step-sub { font-size: 10px; color: rgba(0,212,255,0.32); line-height: 1.4; }
+
+    /* editable time inside a done step */
+    .step-time-edit { margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+    .step-time-edit input[type="time"] { flex: 1; padding: 5px 8px; font-size: 12px; margin: 0; }
+    .step-time-edit label { font-size: 9px; color: rgba(107,255,184,0.5); letter-spacing: 0.1em; white-space: nowrap; }
+
+    /* LAST LOG */
+    .last-log { padding: 13px 14px; background: var(--cyan-faint); border-radius: 10px; margin-bottom: 10px; border: 1px solid rgba(0,212,255,0.08); }
+    .ll-label { font-size: 10px; color: rgba(0,212,255,0.5); letter-spacing: 0.1em; margin-bottom: 6px; font-weight: 700; }
+    .ll-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; }
+    .ll-key { color: rgba(0,212,255,0.38); }
+    .ll-val { color: rgba(0,212,255,0.7); font-weight: 700; }
+    .ll-val.late { color: var(--red); }
+    .ll-val.early { color: var(--green); }
+    .ll-val.ontime { color: var(--cyan); }
+
+    .sched-btn { width: 100%; padding: 9px 0; background: var(--cyan-faint); border: 1px solid rgba(0,212,255,0.13); border-radius: 10px; color: rgba(0,212,255,0.45); font-family: inherit; font-size: 11px; letter-spacing: 0.15em; cursor: pointer; margin-bottom: 8px; }
+    .sched-panel { background: rgba(0,212,255,0.02); border: 1px solid rgba(0,212,255,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 14px; display: none; }
+    .sched-panel.open { display: block; }
+    .sched-head { display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 7px 12px; border-bottom: 1px solid rgba(0,212,255,0.1); font-size: 9px; color: rgba(0,212,255,0.38); letter-spacing: 0.12em; }
+    .sched-head span:last-child { text-align: right; }
+    .sched-row { display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid rgba(0,212,255,0.05); transition: background 0.12s; }
+    .sched-row:last-child { border-bottom: none; }
+    .sched-row:active, .sched-row.selected { background: rgba(0,212,255,0.09); }
+    .sched-row .sd { font-size: 12px; color: rgba(0,212,255,0.65); }
+    .sched-row.selected .sd { color: var(--cyan); font-weight: 700; }
+    .sched-row .sa { font-size: 12px; color: rgba(0,212,255,0.45); }
+    .sched-row .ss { font-size: 9px; color: rgba(0,212,255,0.28); text-align: right; align-self: center; }
+
+    .wh-link { text-align: center; margin-top: 12px; }
+    .wh-link button { background: none; border: none; color: rgba(0,212,255,0.28); font-family: inherit; font-size: 10px; letter-spacing: 0.15em; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #090917; border: 1px solid rgba(0,212,255,0.28); border-radius: 16px; padding: 22px; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; }
+    .modal h2 { color: var(--cyan); font-family: inherit; font-size: 12px; letter-spacing: 0.2em; margin-bottom: 12px; }
+    .modal-steps { color: rgba(0,212,255,0.6); font-size: 12px; line-height: 1.9; margin-bottom: 12px; }
+    .modal-steps b { color: rgba(0,212,255,0.9); }
+    .modal-btns { display: flex; gap: 8px; margin-top: 12px; }
+    .modal-save { flex: 1; padding: 10px; background: rgba(0,212,255,0.13); border: 1px solid rgba(0,212,255,0.38); border-radius: 8px; color: var(--cyan); font-family: inherit; font-weight: 700; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; }
+    .modal-cancel { flex: 1; padding: 10px; background: transparent; border: 1px solid rgba(0,212,255,0.18); border-radius: 8px; color: rgba(0,212,255,0.38); font-family: inherit; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <h1>🚌 TRANSIT TRACKER</h1>
+    <p>PORTLAND · VANCOUVER · PUNCTUALITY LOG</p>
+  </div>
+
+  <div class="route-tabs">
+    <button class="route-tab active" id="tab-105" onclick="switchRoute('105')">
+      <span class="tab-icon">🚌</span>C-TRAN<br>ROUTE 105
+    </button>
+    <button class="route-tab" id="tab-combo" onclick="switchRoute('combo')">
+      <span class="tab-icon">🚊+🚌</span>YELLOW +<br>ROUTE 60
+    </button>
+  </div>
+
+  <!-- ════════════ ROUTE 105 ════════════ -->
+  <div id="panel-105">
+    <div class="card">
+      <div class="clock">
+        <div class="clock-time" id="clock-time">--:--:--</div>
+        <div class="clock-date" id="clock-date">---</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>SELECT TRIP</label>
+        <select id="trip-select-105"></select>
+      </div>
+
+      <div class="trip-info">
+        <div>
+          <div class="ti-label">SCHED DEPART</div>
+          <div class="ti-time" id="105-depart">--</div>
+          <div class="ti-sub" id="105-stop">--</div>
+        </div>
+        <div class="ti-right">
+          <div class="ti-label">SCHED ARRIVE</div>
+          <div class="ti-time" id="105-arrive">--</div>
+          <div class="ti-sub">Broadway &amp; 13th Ave</div>
+        </div>
+        <div class="ti-sched">
+          SCHED RIDE TIME: <span id="105-duration">-- min</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>NOTE (OPTIONAL)</label>
+        <input type="text" id="note-105" placeholder="e.g. heavy traffic, crowded..." />
+      </div>
+
+      <!-- DEPARTURE -->
+      <button class="btn btn-log" id="btn-105-depart" onclick="log105Depart()">🟢 LOG DEPARTURE</button>
+
+      <!-- Editable departure time — shown after tapping log -->
+      <div class="time-entry hidden" id="entry-105-depart">
+        <div class="time-entry-label">DEPARTURE TIME — EDIT IF NEEDED</div>
+        <div class="time-entry-row">
+          <input type="time" id="time-105-depart" step="1" />
+        </div>
+        <div class="time-entry-hint">Tap the time to adjust before submitting</div>
+      </div>
+
+      <!-- ARRIVAL -->
+      <button class="btn btn-log hidden" id="btn-105-arrive" onclick="log105Arrive()">🔴 LOG ARRIVAL</button>
+
+      <!-- Editable arrival time -->
+      <div class="time-entry hidden" id="entry-105-arrive">
+        <div class="time-entry-label">ARRIVAL TIME — EDIT IF NEEDED</div>
+        <div class="time-entry-row">
+          <input type="time" id="time-105-arrive" step="1" />
+        </div>
+        <div class="time-entry-hint">Tap the time to adjust before submitting</div>
+      </div>
+
+      <!-- SEND -->
+      <button class="btn btn-confirm hidden" id="btn-105-send" onclick="send105()">📤 SEND TO SHEETS?</button>
+    </div>
+
+    <div class="last-log hidden" id="last-log-105">
+      <div class="ll-label" id="ll-title-105">LAST TRIP · ROUTE 105</div>
+      <div id="ll-body-105"></div>
+    </div>
+
+    <button class="sched-btn" onclick="toggleSchedule()">▼ VIEW ROUTE 105 SCHEDULE</button>
+    <div class="sched-panel" id="sched-panel-105">
+      <div class="sched-head"><span>DEPARTS</span><span>ARRIVES</span><span>STOP</span></div>
+      <div id="sched-rows-105"></div>
+    </div>
+  </div>
+
+  <!-- ════════════ YELLOW + 60 COMBO ════════════ -->
+  <div id="panel-combo" class="hidden">
+    <div class="card">
+      <div class="clock">
+        <div class="clock-time" id="clock-time-c">--:--:--</div>
+        <div class="clock-date" id="clock-date-c">---</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="combo-header">🚊 Yellow Line + 🚌 Route 60 — Northbound Trip</div>
+
+      <div class="step-track">
+        <div class="step-line"></div>
+        <div class="step active" id="step-0">
+          <div class="step-dot">🚊</div>
+          <div class="step-body">
+            <div class="step-title">BOARD YELLOW LINE</div>
+            <div class="step-sub">Pioneer Courthouse / SW 6th Ave</div>
+          </div>
+        </div>
+        <div class="step locked" id="step-1">
+          <div class="step-dot">🚊</div>
+          <div class="step-body">
+            <div class="step-title">ALIGHT YELLOW LINE</div>
+            <div class="step-sub">Delta Park / Vanport MAX Station</div>
+          </div>
+        </div>
+        <div class="step locked" id="step-2">
+          <div class="step-dot">🚌</div>
+          <div class="step-body">
+            <div class="step-title">BOARD ROUTE 60</div>
+            <div class="step-sub">Delta Park / Vanport</div>
+          </div>
+        </div>
+        <div class="step locked" id="step-3">
+          <div class="step-dot">🏁</div>
+          <div class="step-body">
+            <div class="step-title">ALIGHT ROUTE 60</div>
+            <div class="step-sub">Broadway &amp; 12th St, Vancouver</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>NOTE (OPTIONAL)</label>
+        <input type="text" id="note-combo" placeholder="e.g. long transfer wait..." />
+      </div>
+
+      <button class="btn btn-log" id="btn-combo-step" onclick="logComboStep()">▶ LOG STEP 1 OF 4</button>
+      <button class="btn btn-confirm hidden" id="btn-combo-send" onclick="sendCombo()">📤 SEND TO SHEETS?</button>
+      <button class="btn btn-reset" onclick="resetCombo()">✕ START OVER</button>
+    </div>
+
+    <div class="last-log hidden" id="last-log-combo">
+      <div class="ll-label">LAST TRIP · YELLOW LINE + ROUTE 60</div>
+      <div id="ll-body-combo"></div>
+    </div>
+  </div>
+
+  <div class="wh-link">
+    <button id="wh-btn" onclick="openSetup()">⚙ SETUP GOOGLE SHEETS WEBHOOK</button>
+  </div>
+</div>
+
+<!-- Setup Modal -->
+<div class="modal-overlay" id="setup-modal">
+  <div class="modal">
+    <h2>⚙ GOOGLE SHEETS WEBHOOK</h2>
+    <div class="modal-steps">
+      Paste your Google Apps Script Web App URL below.<br>
+      Make sure your script uses <b>doGet</b> and is deployed with access set to <b>Anyone</b>.
+    </div>
+    <input type="url" id="webhook-input" placeholder="Paste your Web App URL here..." style="margin-top:8px;" />
+    <div class="modal-btns">
+      <button class="modal-save" onclick="saveWebhook()">SAVE</button>
+      <button class="modal-cancel" onclick="closeSetup()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SCHEDULE ──────────────────────────────────────────────────
+const SCHEDULE_105 = [
+  { depart:"5:36 AM",  arrive:"5:55 AM",  stop:"SW 5th & Morrison" },
+  { depart:"6:16 AM",  arrive:"6:35 AM",  stop:"SW 5th & Morrison" },
+  { depart:"7:02 AM",  arrive:"7:21 AM",  stop:"SW 5th & Morrison" },
+  { depart:"7:47 AM",  arrive:"8:07 AM",  stop:"SW 5th & Morrison" },
+  { depart:"8:28 AM",  arrive:"8:48 AM",  stop:"SW 5th & Morrison" },
+  { depart:"9:17 AM",  arrive:"9:37 AM",  stop:"SW 5th & Morrison" },
+  { depart:"9:44 AM",  arrive:"10:04 AM", stop:"SW 5th & Morrison" },
+  { depart:"10:41 AM", arrive:"11:02 AM", stop:"SW 5th & Morrison" },
+  { depart:"11:40 AM", arrive:"12:02 PM", stop:"SW 5th & Morrison" },
+  { depart:"12:43 PM", arrive:"1:06 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"1:43 PM",  arrive:"2:12 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"2:43 PM",  arrive:"3:18 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"3:43 PM",  arrive:"4:22 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"4:23 PM",  arrive:"5:02 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"5:03 PM",  arrive:"5:41 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"5:43 PM",  arrive:"6:17 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"6:13 PM",  arrive:"6:37 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"6:43 PM",  arrive:"7:07 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"7:43 PM",  arrive:"8:04 PM",  stop:"SW 6th & Yamhill"  },
+  { depart:"8:43 PM",  arrive:"9:04 PM",  stop:"SW 6th & Yamhill"  },
+];
+
+const COMBO_META = [
+  { label:"BOARD YELLOW LINE",  stop:"Pioneer Courthouse / SW 6th Ave" },
+  { label:"ALIGHT YELLOW LINE", stop:"Delta Park / Vanport MAX"         },
+  { label:"BOARD ROUTE 60",     stop:"Delta Park / Vanport"             },
+  { label:"ALIGHT ROUTE 60",    stop:"Broadway & 12th St, Vancouver"    },
+];
+
+// ── STATE ─────────────────────────────────────────────────────
+let activeRoute  = "105";
+let selected105  = findNextTrip();
+let scheduleOpen = false;
+let webhookUrl   = "";
+try { webhookUrl = localStorage.getItem("transitWebhookUrl") || ""; } catch {}
+
+// combo state
+let comboStep  = 0;
+let comboTimes = {}; // step index -> "HH:MM:SS" string
+
+// ── HELPERS ───────────────────────────────────────────────────
+function parseTime(str) {
+  str = (str || "").trim();
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
+    const p = str.split(":").map(Number); return p[0] * 60 + p[1];
+  }
+  const sp = str.split(" ");
+  let [h, m] = sp[0].split(":").map(Number);
+  const mer = sp[1] || "";
+  if (mer === "PM" && h !== 12) h += 12;
+  if (mer === "AM" && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+function findNextTrip() {
+  const now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+  for (let i = 0; i < SCHEDULE_105.length; i++)
+    if (parseTime(SCHEDULE_105[i].depart) >= nm) return i;
+  return SCHEDULE_105.length - 1;
+}
+
+function diffMin(a, s) {
+  if (!a || !s || s === "-") return null;
+  try { return parseTime(a) - parseTime(s); } catch { return null; }
+}
+function durMin(leave, arrive) {
+  if (!leave || !arrive) return null;
+  try { return parseTime(arrive) - parseTime(leave); } catch { return null; }
+}
+function fmtDev(mins) {
+  if (mins === null) return { label: "-", cls: "" };
+  if (mins === 0)    return { label: "On time", cls: "ontime" };
+  if (mins > 0)      return { label: `+${mins} min late`, cls: "late" };
+  return { label: `${Math.abs(mins)} min early`, cls: "early" };
+}
+
+// Returns "HH:MM:SS" for now
+function nowStr() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+// Returns "HH:MM" for <input type="time">
+function nowHHMM() {
+  const n = new Date();
+  return String(n.getHours()).padStart(2,"0") + ":" + String(n.getMinutes()).padStart(2,"0");
+}
+function todayStr() {
+  return new Date().toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+// Convert "HH:MM" or "HH:MM:SS" to display string like "08:28 AM"
+function hhmm24to12(str) {
+  if (!str) return "";
+  const parts = str.split(":").map(Number);
+  let h = parts[0], m = parts[1];
+  const mer = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${String(m).padStart(2,"0")} ${mer}`;
+}
+
+// ── SEND via GET ──────────────────────────────────────────────
+async function sendToSheets(params) {
+  const qs = Object.entries(params)
+    .map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v ?? ""))
+    .join("&");
+  await fetch(webhookUrl + "?" + qs, { method: "GET", mode: "no-cors" });
+  return true;
+}
+
+// ── CLOCK ─────────────────────────────────────────────────────
+function tickClock() {
+  const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const ds = new Date().toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" }).toUpperCase();
+  ["clock-time","clock-time-c"].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ts; });
+  ["clock-date","clock-date-c"].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ds; });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ── BUILD 105 SELECT + ROWS ───────────────────────────────────
+const sel = document.getElementById("trip-select-105");
+const schedRows = document.getElementById("sched-rows-105");
+SCHEDULE_105.forEach((t, i) => {
+  const o = document.createElement("option");
+  o.value = i; o.textContent = `${t.depart} -> ${t.arrive}  |  ${t.stop}`; sel.appendChild(o);
+  const r = document.createElement("div");
+  r.className = "sched-row" + (i === selected105 ? " selected" : ""); r.id = `srow-${i}`;
+  r.innerHTML = `<span class="sd">${t.depart}</span><span class="sa">${t.arrive}</span><span class="ss">${t.stop.includes("6th") ? "6th/Yamhill" : "5th/Morrison"}</span>`;
+  r.onclick = () => selectTrip(i, true); schedRows.appendChild(r);
+});
+sel.value = selected105;
+sel.addEventListener("change", () => selectTrip(Number(sel.value), false));
+
+// ── ROUTE SWITCHING ───────────────────────────────────────────
+function switchRoute(r) {
+  activeRoute = r;
+  document.getElementById("tab-105").classList.toggle("active", r === "105");
+  document.getElementById("tab-combo").classList.toggle("active", r === "combo");
+  document.getElementById("panel-105").classList.toggle("hidden", r !== "105");
+  document.getElementById("panel-combo").classList.toggle("hidden", r !== "combo");
+}
+
+// ── 105 ───────────────────────────────────────────────────────
+function selectTrip(idx, closePanel) {
+  document.getElementById(`srow-${selected105}`).classList.remove("selected");
+  selected105 = idx; sel.value = idx;
+  document.getElementById(`srow-${idx}`).classList.add("selected");
+  update105Info();
+  if (closePanel) toggleSchedule(false);
+}
+
+function update105Info() {
+  const t = SCHEDULE_105[selected105];
+  const dur = parseTime(t.arrive) - parseTime(t.depart);
+  document.getElementById("105-depart").textContent   = t.depart;
+  document.getElementById("105-stop").textContent     = t.stop;
+  document.getElementById("105-arrive").textContent   = t.arrive;
+  document.getElementById("105-duration").textContent = `${dur} min`;
+}
+
+function log105Depart() {
+  // Stamp current time into the editable field
+  document.getElementById("time-105-depart").value = nowHHMM();
+
+  // Show editable time entry and arrival button
+  document.getElementById("entry-105-depart").classList.remove("hidden");
+  document.getElementById("btn-105-arrive").classList.remove("hidden");
+  document.getElementById("btn-105-send").classList.add("hidden");
+
+  // Change departure button to indicate it's been tapped
+  const btn = document.getElementById("btn-105-depart");
+  btn.textContent = "✓ DEPARTURE STAMPED";
+  btn.className   = "btn btn-success";
+  btn.disabled    = true;
+}
+
+function log105Arrive() {
+  // Stamp current time into the editable field
+  document.getElementById("time-105-arrive").value = nowHHMM();
+
+  // Show editable arrival time and send button
+  document.getElementById("entry-105-arrive").classList.remove("hidden");
+  document.getElementById("btn-105-send").classList.remove("hidden");
+
+  // Change arrival button
+  const btn = document.getElementById("btn-105-arrive");
+  btn.textContent = "✓ ARRIVAL STAMPED";
+  btn.className   = "btn btn-success";
+  btn.disabled    = true;
+}
+
+async function send105() {
+  if (!webhookUrl) { openSetup(); return; }
+
+  // Read the (possibly edited) times from the input fields
+  const rawLeave  = document.getElementById("time-105-depart").value; // "HH:MM"
+  const rawArrive = document.getElementById("time-105-arrive").value;
+
+  if (!rawLeave || !rawArrive) {
+    alert("Please make sure both departure and arrival times are filled in.");
+    return;
+  }
+
+  const actualLeave   = hhmm24to12(rawLeave);
+  const actualArrive  = hhmm24to12(rawArrive);
+  const t             = SCHEDULE_105[selected105];
+  const scheduledLeave  = t.depart;
+  const scheduledArrive = t.arrive;
+  const tripLabel     = `${t.depart} -> ${t.arrive}`;
+  const note          = document.getElementById("note-105").value;
+
+  const btn = document.getElementById("btn-105-send");
+  btn.textContent = "SENDING...";
+  btn.className   = "btn btn-sending";
+  btn.disabled    = true;
+
+  try {
+    await sendToSheets({
+      date: todayStr(),
+      route: "C-TRAN Route 105",
+      scheduledLeave,
+      actualLeave,
+      scheduledArrive,
+      actualArrive,
+      note: note || "",
+    });
+
+    btn.textContent = "✅ SENT!";
+    btn.className   = "btn btn-success";
+
+    // Show summary
+    const ldev      = fmtDev(diffMin(actualLeave, scheduledLeave));
+    const adev      = fmtDev(diffMin(actualArrive, scheduledArrive));
+    const actualDur = durMin(actualLeave, actualArrive);
+    const schedDur  = durMin(scheduledLeave, scheduledArrive);
+    const ddev      = fmtDev(actualDur !== null && schedDur !== null ? actualDur - schedDur : null);
+
+    const ll = document.getElementById("last-log-105");
+    ll.classList.remove("hidden");
+    document.getElementById("ll-title-105").textContent = `LAST TRIP · ROUTE 105 · ${tripLabel}`;
+    document.getElementById("ll-body-105").innerHTML = `
+      <div class="ll-row"><span class="ll-key">Sched depart</span><span class="ll-val">${scheduledLeave}</span></div>
+      <div class="ll-row"><span class="ll-key">Actual depart</span><span class="ll-val">${actualLeave}</span></div>
+      <div class="ll-row"><span class="ll-key">Leave deviation</span><span class="ll-val ${ldev.cls}">${ldev.label}</span></div>
+      <div class="ll-row"><span class="ll-key">Sched arrive</span><span class="ll-val">${scheduledArrive}</span></div>
+      <div class="ll-row"><span class="ll-key">Actual arrive</span><span class="ll-val">${actualArrive}</span></div>
+      <div class="ll-row"><span class="ll-key">Arrive deviation</span><span class="ll-val ${adev.cls}">${adev.label}</span></div>
+      <div class="ll-row"><span class="ll-key">Actual ride time</span><span class="ll-val">${actualDur !== null ? actualDur + " min" : "-"}</span></div>
+      <div class="ll-row"><span class="ll-key">Duration deviation</span><span class="ll-val ${ddev.cls}">${ddev.label}</span></div>
+    `;
+
+    document.getElementById("note-105").value = "";
+
+    // Reset all 105 buttons/fields after 3s
+    setTimeout(() => reset105(), 3000);
+
+  } catch (err) {
+    btn.textContent = "✗ FAILED — TAP TO RETRY";
+    btn.className   = "btn btn-confirm";
+    btn.disabled    = false;
+  }
+}
+
+function reset105() {
+  document.getElementById("btn-105-depart").textContent = "🟢 LOG DEPARTURE";
+  document.getElementById("btn-105-depart").className   = "btn btn-log";
+  document.getElementById("btn-105-depart").disabled    = false;
+  document.getElementById("entry-105-depart").classList.add("hidden");
+  document.getElementById("time-105-depart").value      = "";
+
+  document.getElementById("btn-105-arrive").textContent = "🔴 LOG ARRIVAL";
+  document.getElementById("btn-105-arrive").className   = "btn btn-log";
+  document.getElementById("btn-105-arrive").disabled    = false;
+  document.getElementById("btn-105-arrive").classList.add("hidden");
+  document.getElementById("entry-105-arrive").classList.add("hidden");
+  document.getElementById("time-105-arrive").value      = "";
+
+  document.getElementById("btn-105-send").classList.add("hidden");
+  document.getElementById("btn-105-send").className     = "btn btn-confirm";
+  document.getElementById("btn-105-send").disabled      = false;
+}
+
+function toggleSchedule(force) {
+  scheduleOpen = force === false ? false : !scheduleOpen;
+  document.getElementById("sched-panel-105").classList.toggle("open", scheduleOpen);
+  document.querySelector(".sched-btn").textContent = (scheduleOpen ? "▲ HIDE" : "▼ VIEW") + " ROUTE 105 SCHEDULE";
+}
+
+// ── COMBO ─────────────────────────────────────────────────────
+function updateComboUI() {
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`step-${i}`);
+    el.classList.remove("active", "done", "locked");
+
+    if (i < comboStep) {
+      el.classList.add("done");
+      // Ensure editable time field exists inside the done step
+      let editRow = el.querySelector(".step-time-edit");
+      if (!editRow) {
+        editRow = document.createElement("div");
+        editRow.className = "step-time-edit";
+        editRow.innerHTML = `<label>ADJUST TIME</label><input type="time" id="combo-time-${i}" step="1" />`;
+        el.querySelector(".step-body").appendChild(editRow);
+      }
+      // Set the value to the logged time (convert to HH:MM for input)
+      const inp = document.getElementById(`combo-time-${i}`);
+      if (inp && comboTimes[i] && !inp.value) {
+        const parts = comboTimes[i].split(":").map(Number);
+        inp.value = String(parts[0]).padStart(2,"0") + ":" + String(parts[1]).padStart(2,"0");
+      }
+    } else if (i === comboStep) {
+      el.classList.add("active");
+    } else {
+      el.classList.add("locked");
+    }
+  }
+
+  const stepBtn = document.getElementById("btn-combo-step");
+  const sendBtn = document.getElementById("btn-combo-send");
+
+  if (comboStep < 4) {
+    stepBtn.textContent = `▶ LOG STEP ${comboStep + 1} OF 4 · ${COMBO_META[comboStep].label}`;
+    stepBtn.className   = "btn btn-log";
+    stepBtn.disabled    = false;
+    stepBtn.classList.remove("hidden");
+    sendBtn.classList.add("hidden");
+  } else {
+    stepBtn.classList.add("hidden");
+    sendBtn.classList.remove("hidden");
+    sendBtn.textContent = "📤 SEND TO SHEETS?";
+    sendBtn.className   = "btn btn-confirm";
+    sendBtn.disabled    = false;
+  }
+}
+
+function logComboStep() {
+  if (comboStep >= 4) return;
+  // Store raw now string; editable field will be shown via updateComboUI
+  const n = new Date();
+  comboTimes[comboStep] = n.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  comboStep++;
+
+  const btn = document.getElementById("btn-combo-step");
+  btn.textContent = `✓ STEP ${comboStep} LOGGED`;
+  btn.className   = "btn btn-success";
+  btn.disabled    = true;
+
+  setTimeout(() => updateComboUI(), 1000);
+}
+
+async function sendCombo() {
+  if (!webhookUrl) { openSetup(); return; }
+
+  // Read times from editable fields (may have been adjusted)
+  const getRaw = (i) => {
+    const inp = document.getElementById(`combo-time-${i}`);
+    return inp ? inp.value : "";
+  };
+
+  const actualLeave  = hhmm24to12(getRaw(0));
+  const actualArrive = hhmm24to12(getRaw(3));
+
+  if (!actualLeave || !actualArrive) {
+    alert("Missing times — please make sure all 4 steps are logged.");
+    return;
+  }
+
+  const actualDur = durMin(actualLeave, actualArrive);
+
+  const btn = document.getElementById("btn-combo-send");
+  btn.textContent = "SENDING...";
+  btn.className   = "btn btn-sending";
+  btn.disabled    = true;
+
+  try {
+    await sendToSheets({
+      date:            todayStr(),
+      route:           "Yellow Line + C-TRAN Route 60",
+      scheduledLeave:  "-",
+      actualLeave,
+      scheduledArrive: "-",
+      actualArrive,
+      note:            document.getElementById("note-combo").value || "",
+    });
+
+    btn.textContent = "✅ SENT!";
+    btn.className   = "btn btn-success";
+
+    const ll = document.getElementById("last-log-combo");
+    ll.classList.remove("hidden");
+    document.getElementById("ll-body-combo").innerHTML = `
+      <div class="ll-row"><span class="ll-key">Boarded Yellow</span><span class="ll-val">${hhmm24to12(getRaw(0))}</span></div>
+      <div class="ll-row"><span class="ll-key">Alighted Yellow</span><span class="ll-val">${hhmm24to12(getRaw(1))}</span></div>
+      <div class="ll-row"><span class="ll-key">Boarded Route 60</span><span class="ll-val">${hhmm24to12(getRaw(2))}</span></div>
+      <div class="ll-row"><span class="ll-key">Alighted Route 60</span><span class="ll-val">${hhmm24to12(getRaw(3))}</span></div>
+      <div class="ll-row"><span class="ll-key">Total ride time</span><span class="ll-val">${actualDur !== null ? actualDur + " min" : "-"}</span></div>
+      <div class="ll-row"><span class="ll-key">Duration deviation</span><span class="ll-val">- (no schedule)</span></div>
+    `;
+
+    document.getElementById("note-combo").value = "";
+    setTimeout(() => resetCombo(), 3000);
+
+  } catch (err) {
+    btn.textContent = "✗ FAILED — TAP TO RETRY";
+    btn.className   = "btn btn-confirm";
+    btn.disabled    = false;
+  }
+}
+
+function resetCombo() {
+  comboStep = 0; comboTimes = {};
+  for (let i = 0; i < 4; i++) {
+    const el     = document.getElementById(`step-${i}`);
+    const edit   = el.querySelector(".step-time-edit");
+    if (edit) edit.remove();
+  }
+  document.getElementById("note-combo").value = "";
+  document.getElementById("btn-combo-send").classList.add("hidden");
+  const stepBtn = document.getElementById("btn-combo-step");
+  stepBtn.classList.remove("hidden");
+  updateComboUI();
+}
+
+// ── WEBHOOK ───────────────────────────────────────────────────
+function openSetup()  { document.getElementById("webhook-input").value = webhookUrl; document.getElementById("setup-modal").classList.add("open"); }
+function closeSetup() { document.getElementById("setup-modal").classList.remove("open"); }
+function saveWebhook() {
+  const val = document.getElementById("webhook-input").value.trim();
+  webhookUrl = val;
+  try { localStorage.setItem("transitWebhookUrl", val); } catch {}
+  document.getElementById("wh-btn").textContent = val ? "⚙ CHANGE WEBHOOK" : "⚙ SETUP GOOGLE SHEETS WEBHOOK";
+  closeSetup();
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+update105Info();
+updateComboUI();
+if (webhookUrl) document.getElementById("wh-btn").textContent = "⚙ CHANGE WEBHOOK";
+</script>
+</body>
+</html>
